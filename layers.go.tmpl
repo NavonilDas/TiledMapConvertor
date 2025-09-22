@@ -1,0 +1,37 @@
+package tile
+
+import (
+	_ "embed"
+	"encoding/binary"
+
+	"github.com/hajimehoshi/ebiten/v2"
+)
+
+//go:embed layers.bin
+var LayersData []byte
+
+const LAYER_WIDTH = $layer_width
+const LAYER_HEIGHT = $layer_height
+const NUM_LAYERS = $num_layers
+const NUM_BYTES = $num_bytes
+const LAYER_TILE_SIZE = $tile_size
+
+func GetLayerValues(x, y int) []uint {
+	var result []uint
+	index := NUM_BYTES * (x*LAYER_WIDTH + y)
+	for layer := 0; layer < NUM_LAYERS; layer++ {
+		offset := layer * LAYER_HEIGHT * LAYER_WIDTH * NUM_BYTES
+		val := getValueFromBytes(offset + index)
+		result = append(result, val)
+	}
+	return result
+}
+
+func getValueFromBytes(index int) uint {
+	if NUM_BYTES == 2 {
+		val := binary.BigEndian.Uint16(LayersData[index : index+2])
+		return uint(val)
+	}
+	val := binary.BigEndian.Uint32(LayersData[index : index+4])
+	return uint(val)
+}
