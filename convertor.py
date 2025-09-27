@@ -2,6 +2,11 @@ import os
 import json
 import numpy as np
 from string import Template
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import time
+from typing import List
+import sys
 
 items = os.listdir("./")
 
@@ -28,14 +33,14 @@ def handle_chunk(chunk, minimum, dest, first_id):
         for j in range(ch):
             if data[i*cw + j] == 0:
                 continue
-            dest[cx + i][cy + j] = (data[i*cw + j] - first_id)
+            dest[cy + i][cx + j] = (data[i*cw + j] - first_id)
 
 
-def process_tile_map(file_path:str):
+def process_tile_map(file_path:str, out_location:str):
     with open(file_path) as tile_map_file,\
-        open("layers.bin", "wb") as output_file,\
+        open(out_location + "\\layers.bin", "wb") as output_file,\
         open("layers.go.tmpl", "r") as layer_go_template,\
-        open("layers.go", "w") as layers_go_output:
+        open(out_location + "\\layers.go", "w") as layers_go_output:
 
         tile_map_json = json.load(tile_map_file)
         layers = tile_map_json.get('layers')
@@ -55,7 +60,7 @@ def process_tile_map(file_path:str):
         
         for tileset in tile_map_json.get("tilesets"):
             first_id = min(first_id, tileset.get("firstgid"))
-        
+
         for layer in layers:
             # x_max , y_max = DEF_MIN, DEF_MIN
             for chunk in layer.get("chunks"):
@@ -67,17 +72,21 @@ def process_tile_map(file_path:str):
             # print([x_min , x_max])
             # print([y_min , y_max])
 
+        # print("Min ",x_min,"Min Y", y_min)
+
         for layer in layers:
             values = np.zeros((w,h),dtype=">u"+str(num_bytes)) # Storing 2 bytes for now will change it to 4 bytes once we cross number > 2^16
+            # values = np.zeros((w,h),dtype=int)
             for chunk in layer.get("chunks"):
                 handle_chunk(chunk, (x_min, y_min), values, first_id)
             
             # merge all the layers into one file
             output_file.write(values.tobytes())
-            # print(w,h)
+            print("Wrote Layer {} to file",l_count)
+            # np.savetxt("Layer {}.csv".format(l_count), values, delimiter=',', fmt="%d")
             # print(len(values.tobytes()))
             l_count += 1
-            print(values)
+            # print(values)
         # generate go files embed and config file storing
         # We can create a separate json file and read it in go, but i don't want read overhead
         template = Template(layer_go_template.read())
@@ -90,6 +99,41 @@ def process_tile_map(file_path:str):
                 tile_size = tile_width
             )
         )
-        
-for tile_map in tilemaps:
-    process_tile_map(tile_map)
+
+class TimeMapHandler(FileSystemEventHandler):
+    def __init__(self, tilemaps:List[str], out_location:str):
+        super().__init__()
+        self.tilemaps = tilemaps
+        self.out_location = out_location
+    
+    def process_file(self, filename:str):
+        process_tile_map(filename, self.out_location)
+    
+    def on_modified(self, event):
+        super().on_modified(event)
+        filename = os.path.basename(event.src_path)
+        if filename in self.tilemaps:
+           print("Modified {}".format(event.src_path))
+           process_tile_map(filename)
+
+    def on_moved(self, event):
+        super().on_modified(event)
+        filename = os.path.basename(event.dest_path)
+        if filename in self.tilemaps:
+            print("Moved Some Temp File To {}".format(filename))
+            process_tile_map(filename)
+
+
+
+if __name__ == "__main__":
+    out_location = sys.argv[1] if len(sys.argv) > 1 else '.'
+    event_handler = TimeMapHandler(tilemaps, out_location)
+    observer = Observer()
+    observer.schedule(event_handler, '.', recursive=True)
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
