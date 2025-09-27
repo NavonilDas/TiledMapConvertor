@@ -82,7 +82,7 @@ def process_tile_map(file_path:str, out_location:str):
             
             # merge all the layers into one file
             output_file.write(values.tobytes())
-            print("Wrote Layer {} to file",l_count)
+            print("Wrote file to Layer ",l_count)
             # np.savetxt("Layer {}.csv".format(l_count), values, delimiter=',', fmt="%d")
             # print(len(values.tobytes()))
             l_count += 1
@@ -107,21 +107,19 @@ class TimeMapHandler(FileSystemEventHandler):
         self.out_location = out_location
     
     def process_file(self, filename:str):
-        process_tile_map(filename, self.out_location)
+        if filename in self.tilemaps:
+            print("Update in File", filename)
+            process_tile_map(filename, self.out_location)
     
     def on_modified(self, event):
         super().on_modified(event)
         filename = os.path.basename(event.src_path)
-        if filename in self.tilemaps:
-           print("Modified {}".format(event.src_path))
-           process_tile_map(filename)
+        self.process_file(filename)
 
     def on_moved(self, event):
         super().on_modified(event)
         filename = os.path.basename(event.dest_path)
-        if filename in self.tilemaps:
-            print("Moved Some Temp File To {}".format(filename))
-            process_tile_map(filename)
+        self.process_file(filename)
 
 
 
