@@ -17,12 +17,19 @@ const LAYER_TILE_SIZE = $tile_size
 func GetLayerValues(x, y int) []uint {
 	var result []uint
 	index := NUM_BYTES * (x*LAYER_WIDTH + y)
-	for layer := 0; layer < NUM_LAYERS; layer++ {
+	for layer := 0; layer < NUM_LAYERS - 1; layer++ {
 		offset := layer * LAYER_HEIGHT * LAYER_WIDTH * NUM_BYTES
 		val := getValueFromBytes(offset + index)
 		result = append(result, val)
 	}
 	return result
+}
+
+func GetLayerAbovePlayer(x, y int) uint {
+	index := NUM_BYTES * (x*LAYER_WIDTH + y)
+	offset := (NUM_LAYERS - 1) * LAYER_HEIGHT * LAYER_WIDTH * NUM_BYTES
+	val := getValueFromBytes(offset + index)
+	return val
 }
 
 func getValueFromBytes(index int) uint {

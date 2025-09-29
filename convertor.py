@@ -15,6 +15,10 @@ tilemaps = []
 
 DEF_MAX = 9999999999
 DEF_MIN = -9999999999
+PROPERTIES = "properties"
+
+COLLIDE_PROPERTY = "Collide"
+ANIMATE_PROPERTY = "ANIMATE"
 
 for item in items:
     if item.endswith(".tmj"):
@@ -59,7 +63,7 @@ def process_tile_map(file_path:str, out_location:str):
             h = max(h, layer.get("height"))
         
         for tileset in tile_map_json.get("tilesets"):
-            first_id = min(first_id, tileset.get("firstgid"))
+            first_id = min(first_id, tileset.get("firstgid", 0))
 
         for layer in layers:
             # x_max , y_max = DEF_MIN, DEF_MIN
@@ -100,16 +104,39 @@ def process_tile_map(file_path:str, out_location:str):
             )
         )
 
+def process_tileset(filepath:str, out_location:str):
+    with open(filepath) as tile_set_json_file,\
+        open(out_location+"\\tileCollision.bin", "wb") as collision_file:
+        tile_set_json = json.load(tile_set_json_file)
+        collisions:List[int] = []
+        for tile in tile_set_json['tiles']:
+            if PROPERTIES in tile:
+                properties = tile[PROPERTIES]
+                for prop in properties:
+                    if prop['name'] == COLLIDE_PROPERTY and prop['value']:
+                        tile_id:int = tile.get('id')
+                        collisions.append(tile_id)
+        
+        collisions.sort()
+        print(collisions)
+        for tile_id in collisions:
+            collision_file.write(tile_id.to_bytes(2, byteorder='big'))
+
 class TimeMapHandler(FileSystemEventHandler):
-    def __init__(self, tilemaps:List[str], out_location:str):
+    def __init__(self, tilemaps:List[str], tilesets:List[str], out_location:str):
         super().__init__()
         self.tilemaps = tilemaps
+        self.tilesets = tilesets
         self.out_location = out_location
     
     def process_file(self, filename:str):
         if filename in self.tilemaps:
             print("Update in File", filename)
             process_tile_map(filename, self.out_location)
+        
+        if filename in self.tilesets:
+            print("Update in Tileset File", filename)
+            process_tileset(filename, self.out_location)
     
     def on_modified(self, event):
         super().on_modified(event)
@@ -125,7 +152,7 @@ class TimeMapHandler(FileSystemEventHandler):
 
 if __name__ == "__main__":
     out_location = sys.argv[1] if len(sys.argv) > 1 else '.'
-    event_handler = TimeMapHandler(tilemaps, out_location)
+    event_handler = TimeMapHandler(tilemaps, tileset, out_location)
     observer = Observer()
     observer.schedule(event_handler, '.', recursive=True)
     observer.start()
